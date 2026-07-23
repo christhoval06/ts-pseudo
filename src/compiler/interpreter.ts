@@ -205,6 +205,10 @@ export class Interpreter {
       }
     }
 
+    if (!node.dimensions) {
+      initialValue = this.coerceValueForType(node.varType, initialValue, node.identifier, node.pos);
+    }
+
     this.variables.set(node.identifier, {
       name: node.identifier,
       type: node.varType,
@@ -225,7 +229,17 @@ export class Interpreter {
       if (!this.isRecord(varInfo.value)) {
         throw new InterpreterError(`'${node.identifier}' no es un registro/TIPO`, node.pos);
       }
-      varInfo.value[node.propertyName] = rhsValue;
+      const field = this.typeDeclarations
+        .get(varInfo.type)
+        ?.fields.find((declaredField) => declaredField.name === node.propertyName);
+      varInfo.value[node.propertyName] = field
+        ? this.coerceValueForType(
+            field.fieldType,
+            rhsValue,
+            `${node.identifier}.${node.propertyName}`,
+            node.pos
+          )
+        : rhsValue;
     } else if (node.indexExpr) {
       const varInfo = this.variables.get(node.identifier);
       if (!varInfo) {
@@ -239,7 +253,10 @@ export class Interpreter {
         node.indexExprs ?? [node.indexExpr],
         node.pos
       );
-      this.assignIndexedValue(varInfo.value, indexes, rhsValue, node.pos);
+      const typedValue = this.isGenericCollectionType(varInfo.type)
+        ? rhsValue
+        : this.coerceValueForType(varInfo.type, rhsValue, node.identifier, node.pos);
+      this.assignIndexedValue(varInfo.value, indexes, typedValue, node.pos);
     } else {
       const existing = this.variables.get(node.identifier);
       if (!existing) {
@@ -250,7 +267,7 @@ export class Interpreter {
       this.variables.set(node.identifier, {
         name: node.identifier,
         type: existing.type,
-        value: rhsValue,
+        value: this.coerceValueForType(existing.type, rhsValue, node.identifier, node.pos),
         isConstant: existing.isConstant,
       });
     }
@@ -294,10 +311,11 @@ export class Interpreter {
         if (existing) {
           this.assertMutable(existing, node.pos);
         }
+        const typeName = existing ? existing.type : 'CADENA';
         this.variables.set(node.identifier, {
           name: node.identifier,
-          type: existing ? existing.type : 'CADENA',
-          value: parsedVal,
+          type: typeName,
+          value: this.coerceValueForType(typeName, parsedVal, node.identifier, node.pos),
         });
 
         resolve();
@@ -700,6 +718,66 @@ export class Interpreter {
     if (Array.isArray(value)) return [...value];
     if (this.isRecord(value)) return { ...value };
     return value;
+  }
+
+  private coerceValueForType(
+    typeName: string,
+    value: unknown,
+    variableName: string,
+    pos?: Position
+  ): unknown {
+    const normalizedType = typeName.toUpperCase();
+
+    switch (normalizedType) {
+      case 'ENTERO':
+      case 'ENETRO':
+        if (typeof value === 'number' && Number.isInteger(value)) return value;
+        throw new InterpreterError(
+          `La variable '${variableName}' es Entero y solo acepta un número entero`,
+          pos
+        );
+
+      case 'DECIMAL':
+      case 'REAL':
+        if (typeof value === 'number') return value;
+        throw new InterpreterError(
+          `La variable '${variableName}' es Decimal y solo acepta un número`,
+          pos
+        );
+
+      case 'CADENA':
+      case 'TEXTO':
+        if (typeof value === 'string') return value;
+        throw new InterpreterError(
+          `La variable '${variableName}' es Texto y solo acepta texto`,
+          pos
+        );
+
+      case 'BOOLEANO':
+      case 'LOGICO':
+        if (typeof value === 'boolean') return value;
+        throw new InterpreterError(
+          `La variable '${variableName}' es Logico y solo acepta Verdadero o Falso`,
+          pos
+        );
+
+      case 'ARRAY':
+      case 'MATRIZ':
+      case 'LISTA':
+        if (Array.isArray(value)) return value;
+        throw new InterpreterError(
+          `La variable '${variableName}' es ${typeName} y solo acepta una lista o matriz`,
+          pos
+        );
+
+      default:
+        return value;
+    }
+  }
+
+  private isGenericCollectionType(typeName: string): boolean {
+    const normalizedType = typeName.toUpperCase();
+    return normalizedType === 'ARRAY' || normalizedType === 'MATRIZ' || normalizedType === 'LISTA';
   }
 
   private async evaluateIndexExpressions(
