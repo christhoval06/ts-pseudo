@@ -4,8 +4,6 @@ export const WORKSPACE_PANE_WIDTHS = {
   console: 42,
 } as const;
 
-export type WorkspacePaneMode = keyof typeof WORKSPACE_PANE_WIDTHS;
-
 const MIN_EDITOR_WIDTH_PERCENT = 35;
 const MAX_EDITOR_WIDTH_PERCENT = 75;
 const KEYBOARD_STEP_PERCENT = 2;
@@ -19,7 +17,7 @@ export function calculateEditorWidthFromPointer(
   containerLeft: number,
   containerWidth: number
 ) {
-  if (containerWidth <= 0) return WORKSPACE_PANE_WIDTHS.balanced;
+  if (containerWidth <= 0) return 58;
 
   const rawPercent = ((clientX - containerLeft) / containerWidth) * 100;
   return clampEditorWidthPercent(Math.round(rawPercent));
