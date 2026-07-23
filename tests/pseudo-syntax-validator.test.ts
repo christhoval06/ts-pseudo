@@ -36,3 +36,28 @@ assert.deepEqual(
 Fin`),
   []
 );
+
+const invalidEnteroTextDiagnostics = validatePseudoSyntax(`Inicio
+  Definir edad Como Entero
+  edad <- "edds"
+Fin`);
+
+assert.equal(invalidEnteroTextDiagnostics.length, 1);
+assert.equal(invalidEnteroTextDiagnostics[0].line, 3);
+assert.match(invalidEnteroTextDiagnostics[0].message, /edad.*Entero.*número entero/i);
+
+const invalidEnteroDecimalDiagnostics = validatePseudoSyntax(`Inicio
+  Definir edad Como Entero
+  edad <- 12.5
+Fin`);
+
+assert.equal(invalidEnteroDecimalDiagnostics.length, 1);
+assert.match(invalidEnteroDecimalDiagnostics[0].message, /edad.*Entero.*número entero/i);
+
+const unknownValueDiagnostics = validatePseudoSyntax(`Inicio
+  Definir edad Como Entero
+  edad <- edds
+Fin`);
+
+assert.equal(unknownValueDiagnostics.length, 1);
+assert.match(unknownValueDiagnostics[0].message, /edds.*no está definida/i);

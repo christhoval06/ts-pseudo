@@ -8,13 +8,9 @@ import { Interpreter } from '../compiler/interpreter';
 import { Lexer } from '../compiler/lexer';
 import { Parser } from '../compiler/parser';
 import { ActiveTab, ExecutionStatus, ReadPrompt, VariablesMap } from '../types/app';
+import { getRuntimeErrorPresentation } from '../utils/runtimeErrors';
+import { validatePseudoSyntax } from '../utils/pseudoSyntaxValidator';
 import { useSoundSynth } from './useSoundSynth';
-
-const extractLine = (message: string) => {
-  const lineMatch = message.match(/Linea (\d+)|Línea (\d+)/);
-  const line = lineMatch?.[1] ?? lineMatch?.[2];
-  return line ? parseInt(line, 10) : undefined;
-};
 
 export function usePseudoRuntime() {
   const [code, setCode] = useState(EXAMPLES[0].code);
@@ -43,15 +39,26 @@ export function usePseudoRuntime() {
     setReadPrompt(undefined);
   };
   const reportError = (message: string) => {
-    setStatus('error');
+    const presentation = getRuntimeErrorPresentation(message);
+    setStatus(presentation.status);
+    setActiveTab(presentation.activeTab);
     setErrorMessage(message);
-    setLogs((prev) => [...prev, `Error: ${message}`]);
-    setErrorLine(extractLine(message));
+    setLogs((prev) => [...prev, presentation.log]);
+    setErrorLine(presentation.errorLine);
   };
   const handleRun = async () => {
     resetExecution();
     setStatus('running');
     try {
+      const diagnostics = validatePseudoSyntax(code);
+      if (diagnostics.length > 0) {
+        const diagnostic = diagnostics[0];
+        reportError(
+          `Error Semántico [Línea ${diagnostic.line}, Columna ${diagnostic.column}]: ${diagnostic.message}`
+        );
+        return;
+      }
+
       const lexer = new Lexer(code);
       const parser = new Parser(lexer.tokenize());
       const ast = parser.parse();
